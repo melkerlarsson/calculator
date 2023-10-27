@@ -2,13 +2,13 @@ use std::fmt::Debug;
 
 pub trait TreeNode: Debug {
     fn print(&self) -> String;
-    fn eval(&self) -> isize;
+    fn eval(&self) -> f64;
 }
 
 #[derive(Debug)]
 pub struct Constant {
-    val: isize,
-    symbol: &'static str
+    pub val: f64,
+    pub symbol: char
 }
 
 impl TreeNode for Constant {
@@ -16,7 +16,7 @@ impl TreeNode for Constant {
         format!("{}", self.symbol)
     }
 
-    fn eval(&self) -> isize {
+    fn eval(&self) -> f64 {
         self.val
     }
 }
@@ -32,7 +32,7 @@ impl TreeNode for Add {
         format!("({} + {})", self.left.print(), self.right.print())
     }
 
-    fn eval(&self) -> isize {
+    fn eval(&self) -> f64 {
         self.left.eval() + self.right.eval()
     }
 }
@@ -47,7 +47,7 @@ impl TreeNode for Subtract {
         format!("({} - {})", self.left.print(), self.right.print())
     }
 
-    fn eval(&self) -> isize {
+    fn eval(&self) -> f64 {
         self.left.eval() - self.right.eval()
     }
 }
@@ -62,7 +62,7 @@ impl TreeNode for Negate {
         format!("-({})", self.arg.print())
     }
 
-    fn eval(&self) -> isize {
+    fn eval(&self) -> f64 {
         -(self.arg.eval())
     }
 }
@@ -77,8 +77,8 @@ impl TreeNode for Factorial {
         format!("({})!", self.arg.print())
     }
 
-    fn eval(&self) -> isize {
-        (1..=self.arg.eval()).product()
+    fn eval(&self) -> f64 {
+        ((1..=self.arg.eval() as isize).product::<isize>()) as f64
     }
 }
 
@@ -92,8 +92,8 @@ impl TreeNode for Integer {
         format!("{}", self.val)
     }
 
-    fn eval(&self) -> isize {
-        self.val
+    fn eval(&self) -> f64 {
+        self.val as f64
     }
 }
 
@@ -108,7 +108,7 @@ impl TreeNode for Mult {
         format!("({} * {})", self.left.print(), self.right.print())
     }
 
-    fn eval(&self) -> isize {
+    fn eval(&self) -> f64 {
         self.left.eval() * self.right.eval()
     }
 }
@@ -124,7 +124,7 @@ impl TreeNode for Div {
         format!("({} / ({}))", self.left.print(), self.right.print())
     }
 
-    fn eval(&self) -> isize {
+    fn eval(&self) -> f64 {
         self.left.eval() / self.right.eval()
     }
 }
@@ -140,7 +140,8 @@ impl TreeNode for Pow {
         format!("({} ^ ({}))", self.left.print(), self.right.print())
     }
 
-    fn eval(&self) -> isize {
-        isize::pow(self.left.eval(), self.right.eval().try_into().unwrap())
+    fn eval(&self) -> f64 {
+       let base = self.left.eval();
+       base.powf(self.right.eval())
     }
 }

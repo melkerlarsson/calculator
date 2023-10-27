@@ -146,6 +146,10 @@ impl Parser {
 
         if next_token.is_some() {
             match next_token.unwrap() {
+                Token::Constant(constant) => {
+                    self.scanner.scan_token()?;
+                    return Ok(Box::new(Constant { val: constant.val, symbol: constant.symbol }))
+                },  
                 Token::Integer(val) => {
                     self.scanner.scan_token()?;
                     return Ok(Box::new(Integer { val: val as isize }));

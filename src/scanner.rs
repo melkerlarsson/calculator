@@ -1,3 +1,16 @@
+use phf::{phf_map};
+
+static CONSTANTS: phf::Map<char, f64> = phf_map! {
+    'g' => 9.82,
+};
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct Constant {
+    pub val: f64,
+    pub symbol: char,
+
+}
+
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum Token {
     Integer(usize),
@@ -9,6 +22,7 @@ pub enum Token {
     RightParenthesis,
     Factorial,
     Power,
+    Constant(Constant)
 }
 
 #[derive(Debug)]
@@ -43,11 +57,22 @@ impl Scanner {
 
                     match char {
 
+                        char if self.should_skip(char) => {
+                            self.cursor += 1;
+                        }
+
                         char if char.is_ascii_alphabetic() => {
                             self.cursor += 1;
+                            if let Some(val) = CONSTANTS.get(char) {
+                                let token = Some(Token::Constant(Constant { val: *val, symbol: *char }));
+                                self.next_token = token;
+                                return Ok(token);
+                            }  else {
+                                return Err(ScanError::SymbolNotAllowed(*char)); 
+                            }
+
                             
-                            str = Some(format!("{}{}", str.unwrap_or(String::from("")), char));
-                    
+                            //str = Some(format!("{}{}", str.unwrap_or(String::from("")), char));
                         }
 
                         char if char.is_ascii_digit() => {
@@ -76,6 +101,10 @@ impl Scanner {
                 }
             }
         }
+    }
+
+    fn should_skip(&self, char: &char) -> bool {
+        char == &' ' 
     }
 
     fn handle_symbol(&mut self, num: Option<usize>, token: Token) -> Option<Token> {
