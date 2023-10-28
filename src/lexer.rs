@@ -1,14 +1,14 @@
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Constant {
     pub val: f64,
-    pub symbol: char,
+    pub symbol: String,
 }
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     EOF,
     Illegal(char),
-    Integer(usize),
+    Integer(u32),
     Plus,
     Minus,
     Multiplication,
@@ -24,32 +24,44 @@ pub struct Lexer {
     chars: Vec<char>,
     length: usize,
     cursor: usize,
-    ch: char,
+    current: char,
 }
 
 impl Lexer {
     pub fn new(s: &str) -> Lexer {
         let chars: Vec<char> = s.chars().collect();
         let len = chars.len();
-        let first = chars.get(0).unwrap();
 
-        Lexer {
+        let mut lexer = Lexer {
             chars: chars.clone(),
             cursor: 0,
             length: len,
-            ch: *first,
-        }
+            current: '\0',
+        };
+
+        lexer.read_char();
+        lexer
     }
 
-    pub fn read_char(&mut self) {
-        if self.cursor >= self.length {
-            self.ch = '\0';
+    fn read_char(&mut self) {
+        self.current = *self.chars.get(self.cursor).unwrap_or(&'\0');
+        self.cursor += 1;
+    }
+
+    fn read_ident(&mut self) -> String {
+        let mut ident = String::new();
+        while self.current.is_alphabetic() || self.current == '_' || self.current.is_ascii_digit() {
+            ident.push(self.current);
+            self.read_char();
         }
+        ident
     }
 
     pub fn next_token(&mut self) -> Token {
 
-        let token = match self.ch {
+        self.skip_whitespace();
+
+        let token = match self.current {
             '+' => Token::Plus,
             '-' => Token::Minus,
             '*' => Token::Multiplication,
@@ -57,20 +69,53 @@ impl Lexer {
             '!' => Token::ExclamationMark,
             '^' => Token::Caret,
             '(' => Token::LeftParenthesis,
+            ')' => Token::RightParenthesis,
             '\0' => Token::EOF,
-            _ => Token::Illegal(self.ch)
+            c => {
+                if c.is_digit(10) {
+                    return self.read_integer();
+                } else if c.is_alphabetic() {
+                    return self.read_string();
+                } else {
+                    Token::Illegal(c)
+                }
+            }
 
         };
 
+        self.read_char();
         token
     }
 
-    fn should_skip(&self, char: &char) -> bool {
-        char == &' ' 
+    fn read_integer(&mut self) -> Token {
+        let mut num = self.current.to_digit(10).unwrap();
+        self.read_char();
+
+        while self.current.is_digit(10) {
+            num = num * 10 + self.current.to_digit(10).unwrap();
+            self.read_char();
+        }
+
+        Token::Integer(num)
     }
 
-    fn char_is_int(&self, c: char) -> bool {
-        c >= '0' && c <= '9'
+    fn read_string(&mut self) -> Token {
+        let mut str = String::from(self.current);
+        self.read_char();
+
+        while self.current.is_alphabetic() {
+            str.push(self.current);
+            self.read_char();
+        }
+
+        Token::Constant(Constant { val: 0.0, symbol: str })
+        
+    }
+
+    fn skip_whitespace(&mut self) {
+        while self.current.is_whitespace() {
+            self.read_char();
+        }
     }
 }
 
@@ -104,5 +149,40 @@ mod tests {
         }
 
     }
+    #[test]
+    fn no_input() {
+        let mut lexer = Lexer::new("");
+        let expected = [Token::EOF, Token::EOF];
+
+        for token in expected {
+            assert_eq!(token, lexer.next_token());
+        }
+    }
+
+    #[test] 
+    fn integer() {
+        let mut lexer = Lexer::new("4845 12");
+        let expected = [Token::Integer(4845), Token::Integer(12), Token::EOF];
+
+        for token in expected {
+            assert_eq!(token, lexer.next_token());
+        } 
+    }
+
+    #[test] 
+    fn string() {
+        let mut lexer = Lexer::new("G Me sin");
+        let expected = [
+            Token::Constant(Constant { val: 0.0, symbol: String::from("G")}),
+            Token::Constant(Constant { val: 0.0, symbol: String::from("Me")}),
+            Token::Constant(Constant { val: 0.0, symbol: String::from("sin")})
+        ];
+
+        for token in expected {
+            assert_eq!(token, lexer.next_token());
+        }
+    }
+
+    
 }
 

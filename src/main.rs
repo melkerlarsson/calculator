@@ -6,6 +6,8 @@
 
 use std::env;
 
+mod lexer;
+
 use crate::lexer::*;
 
 // const CONSTANTS: HashMap<&str, f64> = HashMap::from([
@@ -49,6 +51,18 @@ fn main() {
 
     println!("Parsing {}", s);
 
+    let mut lexer = Lexer::new("1 2 *");
+
+    println!("{:?}", lexer.next_token());
+    println!("{:?}", lexer.next_token());
+    println!("{:?}", lexer.next_token());
+    println!("{:?}", lexer.next_token());
+    println!("{:?}", lexer.next_token());
+
+
+
+    
+
     // let scanner = Lexer::new(s);
     // let mut parser = Parser::new(scanner);
 
@@ -67,3 +81,4 @@ fn main() {
     // println!("Elapsed time: {:.2?}", elapsed);
 
 }
+
