@@ -1,93 +1,136 @@
+use std::{collections::VecDeque, fmt::Display, str::Chars};
+
+use phf::phf_map;
+
+static CONSTANTS: phf::Map<&'static str, Constant> = phf_map! {
+    "g" => Constant { val: 9.82, symbol: "g"},
+    "pi" => Constant { val: 3.14, symbol: "pi" },
+    "e" => Constant { val: 2.72, symbol: "e" }
+};
+
+static FUNCTIONS: phf::Map<&'static str, Function> = phf_map! {
+    "sin" =>  Function::sin,
+    "ln" => Function::ln,
+};
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum Function {
+    sin,
+    ln,
+}
+
 #[derive(Clone, Debug, PartialEq)]
-pub struct Constant {
+pub struct Constant<'a> {
     pub val: f64,
-    pub symbol: String,
+    pub symbol: &'a str,
+}
+
+impl Display for Constant<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}) - {}", self.symbol, self.val)
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Token {
+pub enum Token<'a> {
     EOF,
-    Illegal(char),
+    Illegal(String),
     Integer(u32),
+    Float(f32),
     Plus,
     Minus,
-    Multiplication,
-    Division,
+    Asterisk,
+    Slash,
     LeftParenthesis,
     RightParenthesis,
     ExclamationMark, // "!"
-    Caret, // "^"
-    Constant(Constant),
+    Caret,           // "^"
+    Constant(Constant<'a>),
+    Function(Function),
 }
 
-pub struct Lexer {
-    chars: Vec<char>,
-    length: usize,
-    cursor: usize,
+pub struct Lexer<'a> {
+    input: Chars<'a>,
     current: char,
+    peek_buffer: VecDeque<char>,
 }
 
-impl Lexer {
-    pub fn new(s: &str) -> Lexer {
-        let chars: Vec<char> = s.chars().collect();
-        let len = chars.len();
-
+impl<'a> Lexer<'a> {
+    pub fn new(input: &str) -> Lexer {
         let mut lexer = Lexer {
-            chars: chars.clone(),
-            cursor: 0,
-            length: len,
+            input: input.chars(),
             current: '\0',
+            peek_buffer: VecDeque::new(),
         };
 
         lexer.read_char();
         lexer
     }
 
-    fn read_char(&mut self) {
-        self.current = *self.chars.get(self.cursor).unwrap_or(&'\0');
-        self.cursor += 1;
+    fn peek(&mut self) -> char {
+        if let Some(c) = self.peek_buffer.front() {
+            *c
+        } else {
+            let next = self.input.next().unwrap_or('\0');
+            self.peek_buffer.push_back(next);
+            next
+        }
     }
 
-    fn read_ident(&mut self) -> String {
-        let mut ident = String::new();
-        while self.current.is_alphabetic() || self.current == '_' || self.current.is_ascii_digit() {
-            ident.push(self.current);
-            self.read_char();
+    fn read_char(&mut self) {
+        if let Some(c) = self.peek_buffer.pop_front() {
+            self.current = c;
+            return;
         }
-        ident
+        self.current = self.input.next().unwrap_or('\0');
     }
 
     pub fn next_token(&mut self) -> Token {
-
         self.skip_whitespace();
 
         let token = match self.current {
             '+' => Token::Plus,
             '-' => Token::Minus,
-            '*' => Token::Multiplication,
-            '/' => Token::Division,
+            '*' => Token::Asterisk,
+            '/' => Token::Slash,
             '!' => Token::ExclamationMark,
             '^' => Token::Caret,
             '(' => Token::LeftParenthesis,
             ')' => Token::RightParenthesis,
             '\0' => Token::EOF,
+            '.' => {
+                self.read_char();
+                if self.current.is_digit(10) {
+                    let mut num = self.current.to_digit(10).unwrap();
+                    self.read_char();
+
+                    while self.current.is_digit(10) {
+                        num = num * 10 + self.current.to_digit(10).unwrap();
+                        self.read_char();
+                    }
+
+                    return Token::Float((".".to_owned() + &num.to_string()).parse::<f32>().unwrap());
+                } else {
+                    return Token::Illegal(".".to_string());
+                }
+            }
             c => {
                 if c.is_digit(10) {
-                    return self.read_integer();
+                    return self.read_number();
                 } else if c.is_alphabetic() {
                     return self.read_string();
                 } else {
-                    Token::Illegal(c)
+                    Token::Illegal(c.to_string())
                 }
             }
-
         };
 
         self.read_char();
         token
     }
 
-    fn read_integer(&mut self) -> Token {
+    fn read_number(&mut self) -> Token {
         let mut num = self.current.to_digit(10).unwrap();
         self.read_char();
 
@@ -96,7 +139,29 @@ impl Lexer {
             self.read_char();
         }
 
-        Token::Integer(num)
+        if self.current == '.' {
+            self.read_char();
+
+            if self.current.is_digit(10) {
+                let mut num2: u32 = self.current.to_digit(10).unwrap();
+                self.read_char();
+
+                while self.current.is_digit(10) {
+                    num2 = num2 * 10 + self.current.to_digit(10).unwrap();
+                    self.read_char();
+                }
+
+                Token::Float(
+                    (num.to_string() + "." + &num2.to_string())
+                        .parse::<f32>()
+                        .unwrap(),
+                )
+            } else {
+                Token::Illegal(".".to_string())
+            }
+        } else {
+            Token::Integer(num)
+        }
     }
 
     fn read_string(&mut self) -> Token {
@@ -108,8 +173,13 @@ impl Lexer {
             self.read_char();
         }
 
-        Token::Constant(Constant { val: 0.0, symbol: str })
-        
+        if let Some(constant) = CONSTANTS.get(str.as_str()) {
+            Token::Constant(constant.clone())
+        } else if let Some(function) = FUNCTIONS.get(str.as_str()) {
+            Token::Function(*function)
+        } else {
+            Token::Illegal(str)
+        }
     }
 
     fn skip_whitespace(&mut self) {
@@ -129,10 +199,10 @@ mod tests {
         let mut lexer = Lexer::new("1 # + 2 * (4-2^3)!");
         let expected = [
             Token::Integer(1),
-            Token::Illegal('#'),
+            Token::Illegal('#'.to_string()),
             Token::Plus,
             Token::Integer(2),
-            Token::Multiplication,
+            Token::Asterisk,
             Token::LeftParenthesis,
             Token::Integer(4),
             Token::Minus,
@@ -147,7 +217,6 @@ mod tests {
         for token in expected {
             assert_eq!(token, lexer.next_token())
         }
-
     }
     #[test]
     fn no_input() {
@@ -159,23 +228,29 @@ mod tests {
         }
     }
 
-    #[test] 
+    #[test]
     fn integer() {
         let mut lexer = Lexer::new("4845 12");
         let expected = [Token::Integer(4845), Token::Integer(12), Token::EOF];
 
         for token in expected {
             assert_eq!(token, lexer.next_token());
-        } 
+        }
     }
 
-    #[test] 
+    #[test]
     fn string() {
-        let mut lexer = Lexer::new("G Me sin");
+        let mut lexer = Lexer::new("g pi Me");
         let expected = [
-            Token::Constant(Constant { val: 0.0, symbol: String::from("G")}),
-            Token::Constant(Constant { val: 0.0, symbol: String::from("Me")}),
-            Token::Constant(Constant { val: 0.0, symbol: String::from("sin")})
+            Token::Constant(Constant {
+                val: 9.82,
+                symbol: "g",
+            }),
+            Token::Constant(Constant {
+                val: 3.14,
+                symbol: "pi",
+            }),
+            Token::Illegal("Me".to_string()),
         ];
 
         for token in expected {
@@ -183,6 +258,56 @@ mod tests {
         }
     }
 
-    
-}
+    #[test]
+    fn functions() {
+        let mut lexer = Lexer::new("sin(2) - ln(4)");
+        let expected = [
+            Token::Function(Function::sin),
+            Token::LeftParenthesis,
+            Token::Integer(2),
+            Token::RightParenthesis,
+            Token::Minus,
+            Token::Function(Function::ln),
+            Token::LeftParenthesis,
+            Token::Integer(4),
+            Token::RightParenthesis,
+        ];
 
+        for token in expected {
+            assert_eq!(token, lexer.next_token());
+        }
+    }
+
+    #[test]
+    fn float() {
+        let mut lexer = Lexer::new("1.9 234.1 2.234 123.456 0.9384 .343");
+        let expected = [
+            Token::Float(1.9),
+            Token::Float(234.1),
+            Token::Float(2.234),
+            Token::Float(123.456),
+            Token::Float(0.9384),
+            Token::Float(0.343),
+        ];
+
+        for token in expected {
+            assert_eq!(token, lexer.next_token())
+        }
+
+    }
+
+    #[test]
+    fn peek() {
+        let mut lexer = Lexer::new("12 g");
+
+        assert_eq!(Token::Integer(12), lexer.next_token());
+        assert_eq!('g', lexer.peek());
+        assert_eq!(
+            Token::Constant(Constant {
+                symbol: "g",
+                val: 9.82
+            }),
+            lexer.next_token()
+        );
+    }
+}
