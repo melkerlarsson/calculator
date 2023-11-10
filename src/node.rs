@@ -8,7 +8,7 @@ pub trait TreeNode: Debug {
 #[derive(Debug)]
 pub struct Constant {
     pub val: f64,
-    pub symbol: char
+    pub symbol: String
 }
 
 impl TreeNode for Constant {

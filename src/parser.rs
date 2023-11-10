@@ -1,210 +1,204 @@
-// use crate::node::*;
-// use crate::lexer::{Lexer, Token};
+use crate::lexer::{Lexer, Token};
+use crate::node::{self, TreeNode};
 
-// pub struct Parser {
-//     scanner: Lexer,
-// }
+#[derive(Debug, PartialEq)]
+pub enum ParseError {
+    ChainedOperators,
+    IllegalCharacter,
+    ExpectedClosingParenthesis,
+    ExpectedExpression,
+}
 
-// #[derive(Debug)]
-// pub enum Error {
-//     ParseError(ParseError),
-//     ScanError(ScanError)
-// }
+type ParseResult = Result<Box<dyn TreeNode>, ParseError>;
 
-// #[derive(Debug)]
-// pub enum ParseError {
-//     ExpectedExpression,
-//     ChainedOperators,
-//     ExpectedClosingParenthesis,
-// }
+pub struct Parser<'a> {
+    lexer: Lexer<'a>,
+    current_token: Token,
+}
 
-// impl From<ParseError> for Error {
-//     fn from(value: ParseError) -> Self {
-//         Error::ParseError(value)
-//     }
-// }
+impl Parser<'_> {
+    pub fn new(str: &str) -> Parser {
+        let lexer = Lexer::new(str);
+        Parser {
+            lexer,
+            current_token: Token::EOF,
+        }
+    }
 
-// impl From<ScanError> for Error {
-//     fn from(value: ScanError) -> Self {
-//         Error::ScanError(value)
-//     }
-// }
+    fn read_token(&mut self) {
+        self.current_token = self.lexer.next_token();
+    }
 
-// type ParseResult = Result<Box<dyn TreeNode>, Error>;
+    pub fn parse(&mut self) -> ParseResult {
+        self.read_token();
+        self.parse_expression()
+    }
 
-// impl Parser {
-//     pub fn new(scanner: Lexer) -> Parser {
-//         Parser { scanner }
-//     }
+    fn parse_expression(&mut self) -> ParseResult {
+        self.parse_addition()
+    }
+    fn parse_addition(&mut self) -> ParseResult {
+        let mut a = self.parse_multiplication()?;
 
-//     pub fn parse(&mut self) -> ParseResult {
-//         self.scanner.scan_token()?;
-//         self.parse_expression()
-//     }
+        loop {
+            match self.current_token {
+                Token::Plus => {
+                    self.read_token();
 
-//     fn parse_expression(&mut self) -> ParseResult {
-//         self.parse_addition()
-//     }
+                    let b = self.parse_multiplication()?;
+                    a = Box::new(node::Add { left: a, right: b })
+                }
+                Token::Minus => {
+                    self.read_token();
 
-//     fn parse_addition(&mut self) -> ParseResult {
-//         let mut a = self.parse_multiplication()?;
+                    let b = self.parse_multiplication()?;
+                    a = Box::new(node::Subtract { left: a, right: b });
+                }
+                _ => {
+                    return Ok(a);
+                }
+            }
+        }
+    }
+    fn parse_multiplication(&mut self) -> ParseResult {
+        let mut a = self.parse_exponentiation()?;
 
-//         loop {
-//             let next_token = self.scanner.next_token;
-//             if next_token.is_some() {
-//                 match next_token.unwrap() {
-//                     Token::Plus => {
-//                         self.scanner.scan_token()?;
+        loop {
+            match self.current_token {
+                Token::Asterisk => {
+                    self.read_token();
 
-//                         let b = self.parse_multiplication()?;
-//                         a = Box::new(Add { left: a, right: b });
-//                     }
-//                     Token::Minus => {
-//                         self.scanner.scan_token()?;
+                    let b = self.parse_exponentiation()?;
+                    a = Box::new(node::Mult { left: a, right: b });
+                }
+                Token::Slash => {
+                    self.read_token();
 
-//                         let b = self.parse_multiplication()?;
-//                         a = Box::new(Subtract { left: a, right: b });
-//                     }
-//                     _ => {
-//                         return Ok(a);
-//                     }
-//                 }
-//             } else {
-//                 return Ok(a);
-//             }
-//         }
-//     }
+                    let b = self.parse_exponentiation()?;
+                    a = Box::new(node::Div { left: a, right: b });
+                }
+                _ => {
+                    return Ok(a);
+                }
+            }
+        }
+    }
 
-//     fn parse_multiplication(&mut self) -> ParseResult {
-//         let mut a = self.parse_exponentiation()?;
+    fn parse_exponentiation(&mut self) -> ParseResult {
+        let a = self.parse_factorial()?;
 
-//         loop {
-//             let next_token = self.scanner.next_token;
-//             if next_token.is_some() {
-//                 match next_token.unwrap() {
-//                     Token::Multiplication => {
-//                         self.scanner.scan_token()?;
+        match self.current_token {
+            Token::Caret => {
+                self.read_token();
 
-//                         let b = self.parse_exponentiation()?;
-//                         a = Box::new(Mult { left: a, right: b });
-//                     }
-//                     Token::Division => {
-//                         self.scanner.scan_token()?;
+                let b = self.parse_exponentiation()?;
+                return Ok(Box::new(node::Pow { left: a, right: b }));
+            }
+            _ => {
+                return Ok(a);
+            }
+        }
+    }
+    fn parse_factorial(&mut self) -> ParseResult {
+        let a = self.parse_basic()?;
 
-//                         let b = self.parse_exponentiation()?;
-//                         a = Box::new(Div { left: a, right: b });
-//                     }
-//                     _ => {
-//                         return Ok(a);
-//                     }
-//                 }
-//             } else {
-//                 return Ok(a);
-//             }
-//         }
-//     }
+        match self.current_token {
+            Token::ExclamationMark => {
+                self.read_token();
+                return Ok(Box::new(node::Factorial { arg: a }));
+            }
+            _ => {
+                return Ok(a);
+            }
+        }
+    }
+    fn parse_basic(&mut self) -> ParseResult {
+        match self.current_token {
+            Token::Constant(constant) => {
+                self.read_token();
+                return Ok(Box::new(node::Constant {
+                    val: 10.0,
+                    symbol: "g".to_string(),
+                }));
+            }
+            Token::Integer(val) => {
+                self.read_token();
+                return Ok(Box::new(node::Integer { val: val as isize }));
+            }
+            Token::LeftParenthesis => {
+                self.read_token();
+                let a = self.parse_expression()?;
 
-//     fn parse_exponentiation(&mut self) -> ParseResult {
-        
+                match self.current_token {
+                    Token::RightParenthesis => {
+                        self.read_token();
+                        return Ok(a);
+                    }
+                    _ => {
+                        return Err(ParseError::ExpectedClosingParenthesis);
+                    }
+                }
+            }
+            Token::Illegal(_) => {
+                return Err(ParseError::IllegalCharacter);
+            }
+            Token::EOF => return Err(ParseError::ExpectedExpression),
+            _ => return Err(ParseError::ExpectedExpression),
+        }
+    }
+}
 
-//         let a = self.parse_factorial()?;
-//         let next_token = self.scanner.next_token;
+mod tests {
+    use super::*;
 
-//         if next_token.is_some() {
-//             match next_token.unwrap() {
-//                 Token::Power => {
-//                     self.scanner.scan_token()?;
-//                     return Ok(Box::new(Pow{left: a, right: self.parse_exponentiation()?}))
-//                 }
-//                 _ => return Ok(a),
-//             }
-//         } else {
-//             return Err(Error::from(ParseError::ExpectedExpression));
-//         }
-//     }
+    fn test(input: &str, expected: f64) {
+        let mut parser = Parser::new(input);
+        let res = parser.parse();
 
-//     fn parse_factorial(&mut self) -> ParseResult {
-//         let a = self.parse_basic()?;
+        assert_eq!(res.unwrap().eval(), expected);
+    }
 
-//         if let Some(next_token) = self.scanner.next_token {
-//             match next_token {
-//                 Token::ExclamationMark => {
-//                     self.scanner.scan_token()?;
-//                     return Ok(Box::new(Factorial { arg: a}));
-//                 },
-//                 _ => {
-//                     return Ok(a);
-//                 }
-//             }
-//         } else {
-//             return Ok(a);
-//         }
-//     }
+    #[test]
+    fn addition() {
+        test("2 + 3 +1 +4", 10.0);
+    }
 
-//     fn parse_basic(&mut self) -> ParseResult {
-//         let next_token = self.scanner.next_token;
+    #[test]
+    fn subtraction() {
+        test("4-2", 2.0);
+    }
 
-//         if next_token.is_some() {
-//             match next_token.unwrap() {
-//                 Token::Constant(constant) => {
-//                     self.scanner.scan_token()?;
-//                     return Ok(Box::new(Constant { val: constant.val, symbol: constant.symbol }))
-//                 },  
-//                 Token::Integer(val) => {
-//                     self.scanner.scan_token()?;
-//                     return Ok(Box::new(Integer { val: val as isize }));
-//                 },
-//                 Token::LeftParenthesis => {
-//                     self.scanner.scan_token()?;
+    #[test]
+    fn multiplication_positive_positive() {
+        test("2 * 6", 12.0);
+    }
 
-//                     let a = self.parse_expression()?;
+    #[test]
+    fn multiplication_negative_positive() {
+        test("(-2) * 6", -12.0);
+    }
 
-//                     if let Some(next_token) = self.scanner.next_token {
-//                         match next_token {
-//                             Token::RightParenthesis => {
-//                                 self.scanner.scan_token()?;
-//                                 return Ok(a);
-//                             },
-//                             _ => return Err(Error::from(ParseError::ExpectedClosingParenthesis))
-//                         }
-//                     } else {
-//                         return Err(Error::from(ParseError::ExpectedClosingParenthesis));
-//                     }
+    #[test]
+    fn power() {
+        test("2^3", 8.0);
+    }
 
-//                 },
-//                 _ => return Err(Error::from(ParseError::ExpectedExpression)),
-//             }
-//         } else {
-//             return Err(Error::from(ParseError::ExpectedExpression));
-//         }
-//     }
-// }
+    #[test]
+    fn factorial() {
+        test("4!", 24.0);
+        test("6!", 720.0)
+    }
 
+    #[test]
+    fn order_of_operation() {
+        test("2*(10-2^3+1)!", 12.0)
+    }
 
+    #[test]
+    fn chained_operators() {
+        let mut parser = Parser::new("1+*2");
+        let result = parser.parse();
 
-// /* 
-// EXPRESSION
-//     : ADDITION
-//     ;
-
-// ADDITION
-//     : MULTIPLICATION {('+' | '-') MULTIPLICATION}
-//     ;
-
-// MULTIPLICATION
-//     : EXPONENTIATION {('*' | '/') EXPONENTIATION}
-//     ;
-
-// EXPONENTIATION
-//     : EXPONENTIATION '^' BASIC
-//     | BASIC
-//     ;
-
-
-
-// BASIC
-//     : number
-//     | identifier
-//     | '(' EXPRESSION ')'
-//     ; 
-// */
+        assert_eq!(result.err().unwrap(), ParseError::ChainedOperators);
+    }
+}

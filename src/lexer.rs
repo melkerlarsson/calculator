@@ -1,11 +1,11 @@
-use std::{collections::VecDeque, fmt::Display, str::Chars};
+use std::{collections::VecDeque, str::Chars};
 
 use phf::phf_map;
 
 static CONSTANTS: phf::Map<&'static str, Constant> = phf_map! {
-    "g" => Constant { val: 9.82, symbol: "g"},
-    "pi" => Constant { val: 3.14, symbol: "pi" },
-    "e" => Constant { val: 2.72, symbol: "e" }
+    "g" => Constant::g,
+    "pi" => Constant::pi,
+    "e" => Constant::e
 };
 
 static FUNCTIONS: phf::Map<&'static str, Function> = phf_map! {
@@ -15,25 +15,21 @@ static FUNCTIONS: phf::Map<&'static str, Function> = phf_map! {
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq, Clone, Copy)]
+pub enum Constant {
+    g,
+    pi,
+    e
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Function {
     sin,
     ln,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Constant<'a> {
-    pub val: f64,
-    pub symbol: &'a str,
-}
-
-impl Display for Constant<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({}) - {}", self.symbol, self.val)
-    }
-}
-
 #[derive(Debug, PartialEq, Clone)]
-pub enum Token<'a> {
+pub enum Token {
     EOF,
     Illegal(String),
     Integer(u32),
@@ -46,7 +42,7 @@ pub enum Token<'a> {
     RightParenthesis,
     ExclamationMark, // "!"
     Caret,           // "^"
-    Constant(Constant<'a>),
+    Constant(Constant),
     Function(Function),
 }
 
@@ -174,7 +170,7 @@ impl<'a> Lexer<'a> {
         }
 
         if let Some(constant) = CONSTANTS.get(str.as_str()) {
-            Token::Constant(constant.clone())
+            Token::Constant(*constant)
         } else if let Some(function) = FUNCTIONS.get(str.as_str()) {
             Token::Function(*function)
         } else {
@@ -242,14 +238,8 @@ mod tests {
     fn string() {
         let mut lexer = Lexer::new("g pi Me");
         let expected = [
-            Token::Constant(Constant {
-                val: 9.82,
-                symbol: "g",
-            }),
-            Token::Constant(Constant {
-                val: 3.14,
-                symbol: "pi",
-            }),
+            Token::Constant(Constant::g),
+            Token::Constant(Constant::pi),
             Token::Illegal("Me".to_string()),
         ];
 
@@ -303,10 +293,7 @@ mod tests {
         assert_eq!(Token::Integer(12), lexer.next_token());
         assert_eq!('g', lexer.peek());
         assert_eq!(
-            Token::Constant(Constant {
-                symbol: "g",
-                val: 9.82
-            }),
+            Token::Constant(Constant::g),
             lexer.next_token()
         );
     }
