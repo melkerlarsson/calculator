@@ -1,4 +1,5 @@
-use std::fmt::Debug;
+use crate::lexer::{Function as function_enum, Constant as constant_enum} ;
+use std::{fmt::Debug, f64::consts::{PI, E}};
 
 pub trait TreeNode: Debug {
     fn print(&self) -> String;
@@ -7,17 +8,20 @@ pub trait TreeNode: Debug {
 
 #[derive(Debug)]
 pub struct Constant {
-    pub val: f64,
-    pub symbol: String
+    pub symbol: constant_enum,
 }
 
 impl TreeNode for Constant {
     fn print(&self) -> String {
-        format!("{}", self.symbol)
+        format!("{:?}", self.symbol)
     }
 
     fn eval(&self) -> f64 {
-        self.val
+        return match self.symbol {
+            constant_enum::g => 9.82,
+            constant_enum::pi => PI,
+            constant_enum::e => E,
+        }
     }
 }
 
@@ -98,6 +102,21 @@ impl TreeNode for Integer {
 }
 
 #[derive(Debug)]
+pub struct Float {
+    pub val: f64,
+}
+
+impl TreeNode for Float {
+    fn print(&self) -> String {
+        format!("{}", self.val)
+    }
+
+    fn eval(&self) -> f64 {
+        self.val
+    }
+}
+
+#[derive(Debug)]
 pub struct Mult {
     pub left: Box<dyn TreeNode>,
     pub right: Box<dyn TreeNode>,
@@ -141,7 +160,26 @@ impl TreeNode for Pow {
     }
 
     fn eval(&self) -> f64 {
-       let base = self.left.eval();
-       base.powf(self.right.eval())
+        let base = self.left.eval();
+        base.powf(self.right.eval())
+    }
+}
+
+#[derive(Debug)]
+pub struct Function {
+    pub arg: Box<dyn TreeNode>,
+    pub function: function_enum,
+}
+
+impl TreeNode for Function {
+    fn print(&self) -> String {
+        format!("({:?} ({}))", self.function, self.arg.print())
+    }
+
+    fn eval(&self) -> f64 {
+        match self.function {
+            function_enum::sin => (self.arg.eval()).sin(),
+            function_enum::ln => self.arg.eval().ln(),
+        }
     }
 }

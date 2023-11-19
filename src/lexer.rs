@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, str::Chars};
+use std::{collections::VecDeque, str::Chars, fmt::Display};
 
 use phf::phf_map;
 

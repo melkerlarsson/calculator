@@ -116,18 +116,19 @@ impl Parser<'_> {
         match self.current_token {
             Token::Constant(constant) => {
                 self.read_token();
-                return Ok(Box::new(node::Constant {
-                    val: 10.0,
-                    symbol: "g".to_string(),
-                }));
+                return Ok(Box::new(node::Constant { symbol: constant }));
             }
             Token::Integer(val) => {
                 self.read_token();
                 return Ok(Box::new(node::Integer { val: val as isize }));
             }
+            Token::Float(val) => {
+                self.read_token();
+                return Ok(Box::new(node::Float { val: val.into() }))
+            }
             Token::LeftParenthesis => {
                 self.read_token();
-                let a = self.parse_expression()?;
+                let a: Box<dyn TreeNode> = self.parse_expression()?;
 
                 match self.current_token {
                     Token::RightParenthesis => {
@@ -139,10 +140,19 @@ impl Parser<'_> {
                     }
                 }
             }
+            Token::Function(function) => {
+                self.read_token();
+                let a: Box<dyn TreeNode> = self.parse_basic()?;
+            
+                return Ok(Box::new(node::Function { arg: a, function }));
+            }
             Token::Illegal(_) => {
                 return Err(ParseError::IllegalCharacter);
             }
             Token::EOF => return Err(ParseError::ExpectedExpression),
+            Token::Minus => {
+                return Ok(Box::new(node::Integer { val: 0 } ))
+            }
             _ => return Err(ParseError::ExpectedExpression),
         }
     }
@@ -154,7 +164,6 @@ mod tests {
     fn test(input: &str, expected: f64) {
         let mut parser = Parser::new(input);
         let res = parser.parse();
-
         assert_eq!(res.unwrap().eval(), expected);
     }
 
@@ -179,6 +188,11 @@ mod tests {
     }
 
     #[test]
+    fn negative_number() {
+        test("(-2)", -2.0);
+    }
+
+    #[test]
     fn power() {
         test("2^3", 8.0);
     }
@@ -200,5 +214,10 @@ mod tests {
         let result = parser.parse();
 
         assert_eq!(result.err().unwrap(), ParseError::ChainedOperators);
+    }
+
+    #[test]
+    fn constant() {
+        test("g", 9.82);
     }
 }
